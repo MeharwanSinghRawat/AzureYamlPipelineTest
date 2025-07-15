@@ -1,0 +1,58 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  name: MeharPool
+
+variables:
+  resource_group_name: 'meharBackend'
+  storage_account_name: 'johny121stg12'
+  container_name: 'backupcontainer'
+  tfstate_key: 'terraform.tfstate'
+
+stages:
+  - stage: TerraformInit
+    displayName: 'Terraform Initialization'
+    jobs:
+      - job: Init
+        displayName: 'Terraform Init Job'
+        steps:
+          - checkout: self
+
+          - task: TerraformInstaller@1
+            displayName: 'Install Terraform'
+            inputs:
+              terraformVersion: '1.5.7'
+
+          - script: |
+              terraform init \
+                -backend-config="resource_group_name=$(resource_group_name)" \
+                -backend-config="storage_account_name=$(storage_account_name)" \
+                -backend-config="container_name=$(container_name)" \
+                -backend-config="key=$(tfstate_key)"
+            displayName: 'Terraform Init'
+
+  - stage: TerraformPlan
+    displayName: 'Terraform Plan'
+    dependsOn: TerraformInit
+    jobs:
+      - job: Plan
+        steps:
+          - checkout: self
+
+          - script: terraform plan -out=tfplan
+            displayName: 'Terraform Plan'
+
+  - stage: TerraformApply
+    displayName: 'Terraform Apply'
+    dependsOn: TerraformPlan
+    condition: succeeded()
+    jobs:
+      - job: Apply
+        steps:
+          - checkout: self
+
+          - script: terraform apply -auto-approve tfplan
+            displayName: 'Terraform Apply'
